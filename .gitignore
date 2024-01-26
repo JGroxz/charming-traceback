@@ -128,3 +128,5 @@ tests/**/output
 !**/.gitkeep
 temp
 .DS_Store
+
+.idea/

@@ -1,5 +1,5 @@
 [build-system]
-requires = [ "poetry-core>=1.0.0",]
+requires = ["poetry-core>=1.0.0", ]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
@@ -9,7 +9,8 @@ description = "Rich traceback adapted for PyCharm IDE by JetBrains"
 authors = []
 readme = "README.md"
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.10"
+rich = "^13.7.0"
 
 [tool.pytest.ini_options]
 log_cli = true
@@ -19,7 +20,4 @@ addopts = "--color=yes"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.4.2"
-python-testing-utilities = "^0.6.0"
-
-[tool.poetry.group.dev.dependencies]
-python-ci-toolkit = ">=0.30.3"
+click = "^8.1.7"
