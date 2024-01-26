@@ -518,10 +518,10 @@ class CharmingTraceback(rich.traceback.Traceback):
                 yield self._render_path(frame.filename, frame.lineno, frame.name, suppressed)
             else:
                 yield Text.assemble(
+                    ("┬\n", "traceback.border"),
                     ("╰─▶", "traceback.border"),
                     " in ",
                     (frame.filename, "pygments.function"),
-                    ("\n┬", "traceback.border"),
                 )
 
             if is_last:
