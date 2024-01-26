@@ -1,10 +1,10 @@
 [build-system]
-requires = ["poetry-core>=1.0.0", ]
+requires = [ "poetry-core>=1.0.0",]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "charming-traceback"
-version = "0.0.1-dev"
+version = "0.1.0-dev"
 description = "Rich traceback adapted for PyCharm IDE by JetBrains"
 authors = []
 readme = "README.md"
