@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "charming-traceback"
-version = "0.1.0-dev"
+version = "0.1.0"
 description = "Rich traceback adapted for PyCharm IDE by JetBrains"
 authors = []
 readme = "README.md"
