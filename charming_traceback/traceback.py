@@ -60,11 +60,11 @@ class CharmingTraceback(rich.traceback.Traceback):
 
     def __init__(
             self,
-            trace: Optional[Trace] = None,
+            trace: Trace | None = None,
             *,
-            width: Optional[int] = 100,
+            width: int = 100,
             extra_lines: int = 3,
-            theme: Optional[str] = None,
+            theme: str | None = None,
             word_wrap: bool = False,
             show_locals: bool = False,
             locals_max_length: int = LOCALS_MAX_LENGTH,
@@ -72,7 +72,7 @@ class CharmingTraceback(rich.traceback.Traceback):
             locals_hide_dunder: bool = True,
             locals_hide_sunder: bool = False,
             indent_guides: bool = True,
-            suppress: Iterable[Union[str, ModuleType]] = (),
+            suppress: Iterable[str | ModuleType] = (),
             max_frames: int = 100,
     ):
         super().__init__(
