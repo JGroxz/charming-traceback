@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from types import ModuleType, TracebackType
 from typing import Callable, Any, Iterable
@@ -9,20 +10,20 @@ from charming_traceback.traceback import CharmingTraceback
 
 
 def install(
-        *,
-        console: Console = None,
-        width: int = 80,
-        extra_lines: int = 3,
-        theme: str = None,
-        word_wrap: bool = False,
-        show_locals: bool = False,
-        locals_max_length: int = LOCALS_MAX_LENGTH,
-        locals_max_string: int = LOCALS_MAX_STRING,
-        locals_hide_dunder: bool = True,
-        locals_hide_sunder: bool = None,
-        indent_guides: bool = True,
-        suppress: Iterable[str | ModuleType] = (),
-        max_frames: int = 100,
+    *,
+    console: Console | None = None,
+    width: int = 80,
+    extra_lines: int = 3,
+    theme: str | None = None,
+    word_wrap: bool = False,
+    show_locals: bool = False,
+    locals_max_length: int = LOCALS_MAX_LENGTH,
+    locals_max_string: int = LOCALS_MAX_STRING,
+    locals_hide_dunder: bool = True,
+    locals_hide_sunder: bool | None = None,
+    indent_guides: bool = True,
+    suppress: Iterable[str | ModuleType] = (),
+    max_frames: int = 100,
 ) -> Callable[[type[BaseException], BaseException, TracebackType | None], Any]:
     """Install a rich traceback handler.
 
@@ -50,7 +51,9 @@ def install(
         Callable: The previous exception handler that was replaced.
 
     """
-    traceback_console = Console(soft_wrap=True, file=sys.stderr) if console is None else console
+    traceback_console = (
+        Console(soft_wrap=True, file=sys.stderr) if console is None else console
+    )
 
     locals_hide_sunder = (
         True
@@ -59,9 +62,9 @@ def install(
     )
 
     def excepthook(
-            type_: type[BaseException],
-            value: BaseException,
-            traceback: TracebackType | None,
+        type_: type[BaseException],
+        value: BaseException,
+        traceback: TracebackType | None,
     ) -> None:
         traceback_console.print(
             CharmingTraceback.from_exception(
@@ -94,7 +97,7 @@ def install(
             default_showtraceback(*args, **kwargs)
 
         def ipy_display_traceback(
-                *args: Any, is_syntax: bool = False, **kwargs: Any
+            *args: Any, is_syntax: bool = False, **kwargs: Any
         ) -> None:
             """Internally called traceback from ip._showtraceback"""
             nonlocal tb_data
@@ -124,13 +127,31 @@ def install(
             *args, is_syntax=True, **kwargs
         )
 
+    def asyncio_excepthook(loop: Any, context: dict[str, Any]) -> None:
+        exception: BaseException | None = context.get("exception", None)
+        if exception is None:
+            return
+
+        exception_type = type(exception)
+
+        excepthook(
+            exception_type,
+            exception,
+            None,
+        )
+
     try:  # pragma: no cover
         # if within ipython, use customized traceback
-        ipython = get_ipython()  # type: ignore[name-defined]
+        ipython = get_ipython()  # type: ignore[name-defined] # noqa: F821
         ipy_excepthook_closure(ipython)
         return sys.excepthook
     except Exception:
         # otherwise use default system hook
         old_excepthook = sys.excepthook
         sys.excepthook = excepthook
+
+        # if within asyncio, update loop exception handler as well
+        loop = asyncio.get_event_loop()
+        loop.set_exception_handler(asyncio_excepthook)
+
         return old_excepthook
