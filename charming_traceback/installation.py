@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from types import ModuleType, TracebackType
 from typing import Callable, Any, Iterable
@@ -133,4 +134,9 @@ def install(
         # otherwise use default system hook
         old_excepthook = sys.excepthook
         sys.excepthook = excepthook
+
+        # if within asyncio, update loop exception handler as well
+        loop = asyncio.get_event_loop()
+        loop.set_exception_handler(asyncio_excepthook)
+
         return old_excepthook
