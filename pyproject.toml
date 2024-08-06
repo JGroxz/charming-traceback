@@ -10,7 +10,7 @@ authors = []
 readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
-rich = "^13.7.0"
+rich = "^13.7.1"
 
 [tool.pytest.ini_options]
 log_cli = true
@@ -21,3 +21,8 @@ addopts = "--color=yes"
 [tool.poetry.group.test.dependencies]
 pytest = "^7.4.2"
 click = "^8.1.7"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.5.6"
+ruff-lsp = "^0.0.54"
+
