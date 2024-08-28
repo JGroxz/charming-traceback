@@ -77,6 +77,7 @@ class CharmingTraceback(Traceback):
         trace: Trace | None = None,
         *,
         width: int | None = 100,
+        code_width: int | None = 88,
         extra_lines: int = 3,
         theme: str | None = None,
         word_wrap: bool = False,
@@ -92,6 +93,7 @@ class CharmingTraceback(Traceback):
         super().__init__(
             trace=trace,
             width=width,
+            code_width=code_width,
             extra_lines=extra_lines,
             theme=theme,
             word_wrap=word_wrap,
