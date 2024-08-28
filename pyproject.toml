@@ -10,7 +10,7 @@ authors = []
 readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
-rich = "^13.7.1"
+rich = "^13.8.0"
 
 [tool.pytest.ini_options]
 log_cli = true
