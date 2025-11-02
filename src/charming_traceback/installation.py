@@ -26,10 +26,10 @@ def install(
     suppress: Iterable[str | ModuleType] = (),
     max_frames: int = 100,
 ) -> Callable[[type[BaseException], BaseException, TracebackType | None], Any]:
-    """Install a rich traceback handler.
+    """
+    Install a rich traceback handler.
 
     Once installed, any tracebacks will be printed with syntax highlighting and rich formatting.
-
 
     Args:
         console (Console | None, optional): Console to write exception to. Default uses internal Console instance.
@@ -96,7 +96,7 @@ def install(
         default_showtraceback = ip.showtraceback  # keep reference of default traceback
 
         def ipy_show_traceback(*args: Any, **kwargs: Any) -> None:
-            """wrap the default ip.showtraceback to store info for ip._showtraceback"""
+            """Wrap the default ip.showtraceback to store info for ip._showtraceback"""
             nonlocal tb_data
             tb_data = kwargs
             default_showtraceback(*args, **kwargs)

@@ -46,7 +46,8 @@ from charming_traceback.styles import (
 
 
 class CharmingTraceback(Traceback):
-    """A Console renderable that renders a traceback.
+    """
+    A Console renderable that renders a traceback.
 
     Args:
         trace (Trace, optional): A `Trace` object produced from `extract`. Defaults to None, which uses
@@ -65,7 +66,6 @@ class CharmingTraceback(Traceback):
         locals_hide_sunder (bool, optional): Hide locals prefixed with single underscore. Defaults to False.
         suppress (Sequence[str | Path | ModuleType]): Optional sequence of modules, module names or paths to exclude from traceback.
         max_frames (int): Maximum number of frames to show in a traceback, 0 for no maximum. Defaults to 100.
-
     """
 
     def __init__(
@@ -512,6 +512,7 @@ class CharmingTraceback(Traceback):
             suppress: Optional sequence of modules or paths to exclude from traceback.
             max_frames: Maximum number of frames to show in a traceback, 0 for no maximum. Defaults to 100.
         """
+
         if console is None:
             console = rich.get_console()
 
