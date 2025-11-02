@@ -12,6 +12,12 @@ def pytest_pyfunc_call():
 @pytest.fixture()
 def console():
     """Rich console which writes to a StringIO."""
+
     from rich.console import Console
 
-    return Console(file=io.StringIO(), width=300, color_system=None)
+    return Console(
+        file=io.StringIO(),
+        width=60,
+        color_system=None,
+        soft_wrap=False,
+    )
