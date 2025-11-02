@@ -27,7 +27,7 @@ TRACEBACK_TOP_BOX = Box(
 
 TRACEBACK_MIDDLE_BOX = Box(
     """\
-┬  ┬
+┬ ┬┬
 │ ││
 ├─┼┤
 │ ││
@@ -40,7 +40,7 @@ TRACEBACK_MIDDLE_BOX = Box(
 
 TRACEBACK_BOTTOM_BOX = Box(
     """\
-┬  ┬
+┬ ┬┬
 │ ││
 ├─┼┤
 │ ││
