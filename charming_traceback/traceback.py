@@ -5,27 +5,24 @@ Rich traceback handler modified to work better for PyCharm IDE.
 from __future__ import annotations
 
 import linecache
-import multiprocessing
 import os
-import sysconfig
-import threading
 from pathlib import Path
-from traceback import walk_tb
-from types import ModuleType, TracebackType
-from typing import Optional, Iterable, Union, Type, Any
+from types import ModuleType
+from typing import Iterable
 
 import rich
 from pygments.token import Text as TextToken
 from pygments.token import Token, String, Name, Number, Comment, Keyword, Operator
-from rich import pretty
 from rich._loop import loop_last
+from rich.cells import cell_len
 from rich.columns import Columns
-from rich.console import Console
+from rich.console import Console, Group
 from rich.console import ConsoleOptions, RenderResult, ConsoleRenderable, group
 from rich.constrain import Constrain
 from rich.highlighter import ReprHighlighter
 from rich.panel import Panel
 from rich.scope import render_scope
+from rich.segment import Segment
 from rich.style import Style
 from rich.syntax import Syntax
 from rich.text import Text
@@ -47,8 +44,6 @@ from charming_traceback.styles import (
     TRACEBACK_BOTTOM_BOX,
 )
 
-_SITE_PACKAGES_DIRECTORY = sysconfig.get_path("platlib")
-
 
 class CharmingTraceback(Traceback):
     """A Console renderable that renders a traceback.
@@ -56,7 +51,8 @@ class CharmingTraceback(Traceback):
     Args:
         trace (Trace, optional): A `Trace` object produced from `extract`. Defaults to None, which uses
             the last exception.
-        width (Optional[int], optional): Number of characters used to traceback. Defaults to 100.
+        width (int | None, optional): Width (in characters) of traceback. Defaults to 100.
+        code_width (int | None, optional): Code width (in characters) of traceback. Defaults to 88.
         extra_lines (int, optional): Additional lines of code to render. Defaults to 3.
         theme (str, optional): Override pygments theme used in traceback.
         word_wrap (bool, optional): Enable word wrapping of long lines. Defaults to False.
@@ -67,7 +63,7 @@ class CharmingTraceback(Traceback):
         locals_max_string (int, optional): Maximum length of string before truncating, or None to disable. Defaults to 80.
         locals_hide_dunder (bool, optional): Hide locals prefixed with double underscore. Defaults to True.
         locals_hide_sunder (bool, optional): Hide locals prefixed with single underscore. Defaults to False.
-        suppress (Sequence[Union[str, Path, ModuleType]]): Optional sequence of modules, module names or paths to exclude from traceback.
+        suppress (Sequence[str | Path | ModuleType]): Optional sequence of modules, module names or paths to exclude from traceback.
         max_frames (int): Maximum number of frames to show in a traceback, 0 for no maximum. Defaults to 100.
 
     """
@@ -78,7 +74,7 @@ class CharmingTraceback(Traceback):
         *,
         width: int | None = 100,
         code_width: int | None = 88,
-        extra_lines: int = 3,
+        extra_lines: int = 1,
         theme: str | None = None,
         word_wrap: bool = False,
         show_locals: bool = False,
@@ -103,17 +99,17 @@ class CharmingTraceback(Traceback):
             locals_hide_dunder=locals_hide_dunder,
             locals_hide_sunder=locals_hide_sunder,
             indent_guides=indent_guides,
-            suppress=(),  # <- we handle suppress iterable differently
+            suppress=[],  # <- we handle suppress list differently from rich (see below)
             max_frames=max_frames,
         )
 
         # handle suppressed modules differently from Rich's implementation
-        self.suppress: list[str | Path | ModuleType] = []
+        self.suppress: list[str | Path | ModuleType] = []  # pyright: ignore [reportIncompatibleVariableOverride]
         for suppress_entity in suppress:
             if isinstance(suppress_entity, ModuleType):
-                assert (
-                    suppress_entity.__file__ is not None
-                ), f"{suppress_entity!r} must be a module with '__file__' attribute"
+                assert suppress_entity.__file__ is not None, (
+                    f"{suppress_entity!r} must be a module with '__file__' attribute"
+                )
                 path = Path(suppress_entity.__file__)
             else:
                 path = Path(suppress_entity)
@@ -125,134 +121,10 @@ class CharmingTraceback(Traceback):
 
             self.suppress.append(suppress_entity)
 
-    @classmethod
-    def extract(
-        cls,
-        exc_type: Type[BaseException],
-        exc_value: BaseException,
-        traceback: Optional[TracebackType],
-        *,
-        show_locals: bool = False,
-        locals_max_length: int = LOCALS_MAX_LENGTH,
-        locals_max_string: int = LOCALS_MAX_STRING,
-        locals_hide_dunder: bool = True,
-        locals_hide_sunder: bool = False,
-    ) -> Trace:
-        """Extract traceback information.
-
-        Args:
-            exc_type (Type[BaseException]): Exception type.
-            exc_value (BaseException): Exception value.
-            traceback (TracebackType): Python Traceback object.
-            show_locals (bool, optional): Enable display of local variables. Defaults to False.
-            locals_max_length (int, optional): Maximum length of containers before abbreviating, or None for no abbreviation.
-                Defaults to 10.
-            locals_max_string (int, optional): Maximum length of string before truncating, or None to disable. Defaults to 80.
-            locals_hide_dunder (bool, optional): Hide locals prefixed with double underscore. Defaults to True.
-            locals_hide_sunder (bool, optional): Hide locals prefixed with single underscore. Defaults to False.
-
-        Returns:
-            Trace: A Trace instance which you can use to construct a `Traceback`.
-        """
-
-        stacks: list[Stack] = []
-        is_cause = False
-
-        def safe_str(_object: Any) -> str:
-            """Don't allow exceptions from __str__ to propagate."""
-            # noinspection PyBroadException
-            try:
-                return str(_object)
-            except Exception:
-                return "<exception str() failed>"
-
-        while True:
-            stack = Stack(
-                exc_type=safe_str(exc_type.__name__),
-                exc_value=safe_str(exc_value),
-                is_cause=is_cause,
-            )
-
-            if isinstance(exc_value, SyntaxError):
-                stack.syntax_error = _SyntaxError(
-                    offset=exc_value.offset or 0,
-                    filename=exc_value.filename or "?",
-                    lineno=exc_value.lineno or 0,
-                    line=exc_value.text or "",
-                    msg=exc_value.msg,
-                )
-
-            stacks.append(stack)
-            append = stack.frames.append
-
-            def get_locals(
-                iter_locals: Iterable[tuple[str, object]],
-            ) -> Iterable[tuple[str, object]]:
-                """Extract locals from an iterator of key pairs."""
-                if not (locals_hide_dunder or locals_hide_sunder):
-                    yield from iter_locals
-                    return
-                for key, value in iter_locals:
-                    if locals_hide_dunder and key.startswith("__"):
-                        continue
-                    if locals_hide_sunder and key.startswith("_"):
-                        continue
-                    yield key, value
-
-            for frame_summary, line_no in walk_tb(traceback):
-                filename = frame_summary.f_code.co_filename
-                if filename and not filename.startswith("<"):
-                    if not os.path.isabs(filename):
-                        filename = os.path.join(_SITE_PACKAGES_DIRECTORY, filename)
-                if frame_summary.f_locals.get("_rich_traceback_omit", False):
-                    continue
-
-                frame = Frame(
-                    filename=filename or "?",
-                    lineno=line_no,
-                    name=frame_summary.f_code.co_name,
-                    locals={
-                        key: pretty.traverse(
-                            value,
-                            max_length=locals_max_length,
-                            max_string=locals_max_string,
-                        )
-                        for key, value in get_locals(frame_summary.f_locals.items())
-                    }
-                    if show_locals
-                    else None,
-                )
-                append(frame)
-                if frame_summary.f_locals.get("_rich_traceback_guard", False):
-                    del stack.frames[:]
-
-            cause = getattr(exc_value, "__cause__", None)
-            if cause:
-                exc_type = cause.__class__
-                exc_value = cause
-                # __traceback__ can be None, e.g. for exceptions raised by the 'multiprocessing' module
-                traceback = cause.__traceback__
-                is_cause = True
-                continue
-
-            cause = exc_value.__context__
-            if cause and not getattr(exc_value, "__suppress_context__", False):
-                exc_type = cause.__class__
-                exc_value = cause
-                traceback = cause.__traceback__
-                is_cause = False
-                continue
-            # No cover, code is reached but coverage doesn't recognize it.
-            break  # pragma: no cover
-
-        trace = Trace(stacks=stacks)
-        return trace
-
     def __rich_console__(
         self, console: Console, options: ConsoleOptions
     ) -> RenderResult:
         theme = self.theme
-        background_style = theme.get_background_style()
         token_style = theme.get_style_for_token
 
         traceback_theme = Theme(
@@ -278,31 +150,50 @@ class CharmingTraceback(Traceback):
         )
 
         highlighter = ReprHighlighter()
-        for last, stack in loop_last(reversed(self.trace.stacks)):
+
+        @group()
+        def _render_stack(stack: Stack, last: bool) -> RenderResult:
             if stack.frames:
-                stack_renderable: ConsoleRenderable = self._render_stack(stack)
-                stack_renderable = Constrain(stack_renderable, self.width)
-                with console.use_theme(traceback_theme):
-                    yield stack_renderable
+                yield Constrain(
+                    self._render_frames(console, stack.frames),
+                    self.width,
+                )
+
             if stack.syntax_error is not None:
-                syntax_error_renderable = self._render_syntax_error(stack.syntax_error)
-                syntax_error_renderable = Constrain(syntax_error_renderable, self.width)
-                with console.use_theme(traceback_theme):
-                    yield syntax_error_renderable
+                yield Constrain(
+                    self._render_syntax_error(stack.syntax_error),
+                    self.width,
+                )
                 yield Text.assemble(
                     (f"{stack.exc_type}: ", "traceback.exc_type"),
                     highlighter(stack.syntax_error.msg),
                 )
-                yield ""
             elif stack.exc_value:
                 yield Text.assemble(
                     (f"{stack.exc_type}: ", "traceback.exc_type"),
                     highlighter(Text.from_ansi(stack.exc_value)),
                 )
-                yield ""
             else:
                 yield Text.assemble((f"{stack.exc_type}", "traceback.exc_type"))
-                yield ""
+
+            for note in stack.notes:
+                yield Text.assemble(("[NOTE] ", "traceback.note"), highlighter(note))
+
+            if stack.is_group:
+                for group_no, group_exception in enumerate(stack.exceptions, 1):
+                    grouped_exceptions: list[Group] = []
+                    for group_last, group_stack in loop_last(group_exception.stacks):
+                        grouped_exceptions.append(
+                            _render_stack(group_stack, group_last)
+                        )
+                    yield Constrain(
+                        Panel(
+                            Group(*grouped_exceptions),
+                            title=f"Sub-exception #{group_no}",
+                            border_style="traceback.group.border",
+                        ),
+                        self.width,
+                    )
 
             if not last:
                 if stack.is_cause:
@@ -313,6 +204,13 @@ class CharmingTraceback(Traceback):
                     yield Text.from_markup(
                         "\n[i]During handling of the above exception, another exception occurred:\n",
                     )
+
+        for last, stack in loop_last(reversed(self.trace.stacks)):
+            with console.use_theme(traceback_theme):
+                yield _render_stack(stack, last)
+
+        # Extra line at the end to separate from the following console output
+        yield Segment.line()
 
     @group()
     def _render_path(
@@ -348,7 +246,7 @@ class CharmingTraceback(Traceback):
                 )
             )
 
-        # if PyCharm's console won't recognize and highlight paths in the console if they get wrapped using line breaks added by rich's formatting;
+        # PyCharm's console won't recognize and highlight paths in the console if they get wrapped using line breaks added by rich's formatting;
         # to prevent this, disable word wrapping for the path text:
         text.overflow = "ignore"
 
@@ -396,48 +294,50 @@ class CharmingTraceback(Traceback):
             width=self.width,
         )
 
-    def _check_should_suppress(self, frame_filename: str):
-        """Check if a frame should be suppressed based on its filename.
+    def _render_frames_header(self, console: Console) -> RenderResult:
+        text = Text.from_markup(
+            "[traceback.title]Traceback [dim](most recent call last)[/][/]",
+            end="",
+        )
 
-        Args:
-            frame_filename (str): Frame's filename.
-        """
+        box = TRACEBACK_TOP_BOX
+        border_style = console.get_style("traceback.border")
 
-        for suppress_entity in self.suppress:
-            assert isinstance(
-                suppress_entity, (str, Path)
-            ), f"{suppress_entity!r} must be a string or a file path"
+        width = (
+            console.width if (self.width is None) else min(self.width, console.width)
+        )
 
-            if isinstance(suppress_entity, Path):
-                if frame_filename.startswith(str(suppress_entity)):
-                    return True
+        if width <= 4:
+            yield Segment(box.get_top([width - 2]), border_style)
+            yield Segment.line()
+            return
 
-            if isinstance(suppress_entity, str):
-                suppress_entity = suppress_entity.replace(".", "/")
-                frame_filename = (
-                    frame_filename.removesuffix(".py")
-                    .removesuffix("__init__")
-                    .removesuffix("/")
-                    .removesuffix("\\")
-                )
-                if f"/{suppress_entity}" in frame_filename:
-                    return True
+        # Center-align the title
+        width = width - 4  # account for box corners
+        text.pad(1)
+        text.truncate(width)
+        excess_space = width - cell_len(text.plain)
+        if excess_space:
+            character = box.top
+            left = excess_space // 2
+            text = Text.assemble(
+                (character * left, border_style),
+                text,
+                (character * (excess_space - left), border_style),
+                no_wrap=True,
+                end="",
+            )
 
-        return False
+        yield Segment(box.top_left + box.top, border_style)
+        yield text
+        yield Segment(box.top + box.top_right, border_style)
+        yield Segment.line()
 
     @group()
-    def _render_stack(self, stack: Stack) -> RenderResult:
+    def _render_frames(self, console: Console, frames: list[Frame]) -> RenderResult:
         theme = self.theme
 
         def read_code(filename: str) -> str:
-            """Read files, and cache results on filename.
-
-            Args:
-                filename (str): Filename to read
-
-            Returns:
-                str: Contents of file
-            """
             return "".join(linecache.getlines(filename))
 
         def render_locals(frame: Frame) -> Iterable[ConsoleRenderable]:
@@ -450,35 +350,20 @@ class CharmingTraceback(Traceback):
                     max_string=self.locals_max_string,
                 )
 
-        exclude_frames: Optional[range] = None
+        exclude_frames: range | None = None
         if self.max_frames != 0:
             exclude_frames = range(
                 self.max_frames // 2,
-                len(stack.frames) - self.max_frames // 2,
+                len(frames) - self.max_frames // 2,
             )
 
         excluded = False
-        for frame_index, frame in enumerate(stack.frames):
+        for frame_index, frame in enumerate(frames):
             is_first = frame_index == 0
-            is_last = frame_index == len(stack.frames) - 1
+            is_last = frame_index == len(frames) - 1
 
             if is_first:
-                description = Text.from_markup(
-                    f"[traceback.error]Printed in "
-                    f"thread [violet i]'{threading.current_thread().name}'[/] "
-                    f"of process [purple i]'{multiprocessing.current_process().name}'[/]",
-                    overflow="fold",
-                )
-
-                yield Panel(
-                    description,
-                    title="[traceback.title]Traceback [dim](most recent call last)",
-                    box=TRACEBACK_TOP_BOX,
-                    style=self.theme.get_background_style(),
-                    border_style="traceback.border",
-                    expand=True,
-                    width=self.width,
-                )
+                yield from self._render_frames_header(console)
 
             if exclude_frames and (frame_index in exclude_frames):
                 excluded = True
@@ -493,8 +378,7 @@ class CharmingTraceback(Traceback):
                 )
                 excluded = False
 
-            frame_filename = frame.filename
-            suppressed = self._check_should_suppress(frame_filename)
+            suppressed = self._check_should_suppress(frame.filename)
             if is_last:
                 suppressed = False  # <- always show the last frame
 
@@ -521,7 +405,7 @@ class CharmingTraceback(Traceback):
                             ),
                             highlight_lines={frame.lineno},
                             word_wrap=self.word_wrap,
-                            code_width=88,
+                            code_width=self.code_width,
                             indent_guides=self.indent_guides,
                             dedent=False,
                         )
@@ -543,7 +427,7 @@ class CharmingTraceback(Traceback):
                         )
                     finally:
                         yield Panel(
-                            panel_content,
+                            panel_content,  # pyright: ignore [reportArgumentType]
                             title_align="center",
                             box=TRACEBACK_MIDDLE_BOX,
                             style=self.theme.get_background_style(),
@@ -562,32 +446,65 @@ class CharmingTraceback(Traceback):
                     ("╰─▶", "traceback.border"),
                     " in ",
                     (frame.filename, "pygments.function"),
+                    overflow="ignore",
                 )
 
             if is_last:
-                yield ""
+                yield Segment.line()
+
+    def _check_should_suppress(self, frame_filename: str):
+        """
+        Check if a frame should be suppressed based on its filename.
+
+        Args:
+            frame_filename (str): Frame's filename.
+        """
+
+        for suppress_entity in self.suppress:
+            assert isinstance(suppress_entity, (str, Path)), (
+                f"{suppress_entity!r} must be a string or a file path"
+            )
+
+            if isinstance(suppress_entity, Path):
+                if frame_filename.startswith(str(suppress_entity)):
+                    return True
+
+            if isinstance(suppress_entity, str):
+                suppress_entity = suppress_entity.replace(".", "/")
+                frame_filename = (
+                    frame_filename.removesuffix(".py")
+                    .removesuffix("__init__")
+                    .removesuffix("/")
+                    .removesuffix("\\")
+                )
+                if f"/{suppress_entity}" in frame_filename:
+                    return True
+
+        return False
 
     @staticmethod
     def print_exception(
         *,
         console: Console | None = None,
-        width: Optional[int] = 100,
-        extra_lines: int = 3,
-        theme: Optional[str] = None,
+        width: int | None = 100,
+        code_width: int | None = 88,
+        extra_lines: int = 1,
+        theme: str | None = None,
         word_wrap: bool = False,
         show_locals: bool = False,
-        suppress: Iterable[Union[str, ModuleType]] = (),
+        suppress: Iterable[str | ModuleType] = (),
         max_frames: int = 100,
     ) -> None:
         """
         Prints a charming render of the last exception and traceback.
 
         Notes:
-            This is a replacement for Rich's built-in Console.print_exception() method which works with CharmingTraceback.
+            This is a replacement for Rich's built-in Console.print_exception() method, using CharmingTraceback instead.
 
         Args:
             console: Console instance to print to. Defaults to the global Rich Console instance.
-            width: Number of characters used to render code. Defaults to 100.
+            width: Width (in characters) of traceback. Defaults to 100.
+            code_width: Code width (in characters) of traceback. Defaults to 88.
             extra_lines: Additional lines of code to render. Defaults to 3.
             theme: Override pygments theme used in traceback
             word_wrap: Enable word wrapping of long lines. Defaults to False.
@@ -600,6 +517,7 @@ class CharmingTraceback(Traceback):
 
         traceback = CharmingTraceback(
             width=width,
+            code_width=code_width,
             extra_lines=extra_lines,
             theme=theme,
             word_wrap=word_wrap,
@@ -607,4 +525,7 @@ class CharmingTraceback(Traceback):
             suppress=suppress,
             max_frames=max_frames,
         )
-        console.print(traceback)
+        console.print(
+            traceback,
+            crop=False,  # <- no crop to always show full traceback, even in narrow consoles
+        )

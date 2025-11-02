@@ -12,8 +12,9 @@ from charming_traceback.traceback import CharmingTraceback
 def install(
     *,
     console: Console | None = None,
-    width: int = 80,
-    extra_lines: int = 3,
+    width: int | None = 100,
+    code_width: int | None = 88,
+    extra_lines: int = 1,
     theme: str | None = None,
     word_wrap: bool = False,
     show_locals: bool = False,
@@ -31,10 +32,11 @@ def install(
 
 
     Args:
-        console (Optional[Console], optional): Console to write exception to. Default uses internal Console instance.
-        width (Optional[int], optional): Width (in characters) of traceback. Defaults to 100.
-        extra_lines (int, optional): Extra lines of code. Defaults to 3.
-        theme (Optional[str], optional): Pygments theme to use in traceback. Defaults to ``None`` which will pick
+        console (Console | None, optional): Console to write exception to. Default uses internal Console instance.
+        width (int | None, optional): Width (in characters) of traceback. Defaults to 100.
+        code_width (int | None, optional): Code width (in characters) of traceback. Defaults to 88.
+        extra_lines (int, optional): Extra lines of code. Defaults to 1.
+        theme (str | None, optional): Pygments theme to use in traceback. Defaults to ``None`` which will pick
             a theme appropriate for the platform.
         word_wrap (bool, optional): Enable word wrapping of long lines. Defaults to False.
         show_locals (bool, optional): Enable display of local variables. Defaults to False.
@@ -44,7 +46,7 @@ def install(
         locals_hide_dunder (bool, optional): Hide locals prefixed with double underscore. Defaults to True.
         locals_hide_sunder (bool, optional): Hide locals prefixed with single underscore. Defaults to False.
         indent_guides (bool, optional): Enable indent guides in code and locals. Defaults to True.
-        suppress (Sequence[Union[str, ModuleType]]): Optional sequence of modules, module names or paths to exclude from traceback.
+        suppress (Sequence[str | ModuleType]): Optional sequence of modules, module names or paths to exclude from traceback.
         max_frames (int, optional): Maximum number of frames to display. Defaults to 100.
 
     Returns:
@@ -52,7 +54,7 @@ def install(
 
     """
     traceback_console = (
-        Console(soft_wrap=True, file=sys.stderr) if console is None else console
+        Console(soft_wrap=True, file=sys.stderr) if (console is None) else console
     )
 
     locals_hide_sunder = (
@@ -66,24 +68,27 @@ def install(
         value: BaseException,
         traceback: TracebackType | None,
     ) -> None:
+        exception_traceback = CharmingTraceback.from_exception(
+            type_,
+            value,
+            traceback,
+            width=width,
+            code_width=code_width,
+            extra_lines=extra_lines,
+            theme=theme,
+            word_wrap=word_wrap,
+            show_locals=show_locals,
+            locals_max_length=locals_max_length,
+            locals_max_string=locals_max_string,
+            locals_hide_dunder=locals_hide_dunder,
+            locals_hide_sunder=bool(locals_hide_sunder),
+            indent_guides=indent_guides,
+            suppress=suppress,
+            max_frames=max_frames,
+        )
         traceback_console.print(
-            CharmingTraceback.from_exception(
-                type_,
-                value,
-                traceback,
-                width=width,
-                extra_lines=extra_lines,
-                theme=theme,
-                word_wrap=word_wrap,
-                show_locals=show_locals,
-                locals_max_length=locals_max_length,
-                locals_max_string=locals_max_string,
-                locals_hide_dunder=locals_hide_dunder,
-                locals_hide_sunder=bool(locals_hide_sunder),
-                indent_guides=indent_guides,
-                suppress=suppress,
-                max_frames=max_frames,
-            )
+            exception_traceback,
+            crop=False,  # <- no crop to always show full traceback, even in narrow consoles
         )
 
     def ipy_excepthook_closure(ip: Any) -> None:  # pragma: no cover
@@ -109,6 +114,8 @@ def install(
             # determine correct tb_offset
             compiled = tb_data.get("running_compiled_code", False)
             tb_offset = tb_data.get("tb_offset", 1 if compiled else 0)
+            if tb_offset is None:
+                tb_offset = 1 if compiled else 0
             # remove ipython internal frames from trace with tb_offset
             for _ in range(tb_offset):
                 if tb is None:
