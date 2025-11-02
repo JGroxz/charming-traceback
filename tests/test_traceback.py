@@ -1,6 +1,5 @@
 import json
 import re
-import sys
 from json import JSONDecodeError
 from types import ModuleType
 
@@ -66,7 +65,20 @@ def test_printing():
 
     install()
 
+    def nested_function():
+        raise ExceptionGroup(
+            "A test group of exceptions.",
+            [
+                ValueError("This is a test error."),
+                RuntimeError("This is just another test error."),
+            ],
+        )
+
     try:
-        raise ValueError("This is a test error.")
-    except ValueError:
-        CharmingTraceback.print_exception()
+        nested_function()
+    except ExceptionGroup:
+        try:
+            raise RuntimeError("This an extra outer exception.")
+        except RuntimeError:
+            console = Console(force_terminal=True)
+            CharmingTraceback.print_exception(console=console)
