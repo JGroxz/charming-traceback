@@ -15,12 +15,6 @@ Install with `pip`:
 pip install charming-traceback
 ```
 
-...or `poetry`:
-
-```bash
-poetry add charming-traceback
-```
-
 ## Usage
 
 To install as the default traceback handler:
