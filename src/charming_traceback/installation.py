@@ -6,7 +6,7 @@ from typing import Callable, Any, Iterable
 from rich.console import Console
 from rich.traceback import LOCALS_MAX_LENGTH, LOCALS_MAX_STRING
 
-from charming_traceback.traceback import CharmingTraceback
+from charming_traceback.traceback import Traceback
 
 
 def install(
@@ -68,7 +68,7 @@ def install(
         value: BaseException,
         traceback: TracebackType | None,
     ) -> None:
-        exception_traceback = CharmingTraceback.from_exception(
+        exception_traceback = Traceback.from_exception(
             type_,
             value,
             traceback,

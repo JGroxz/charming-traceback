@@ -6,7 +6,7 @@ from types import ModuleType
 import pytest
 from rich.console import Console
 
-from charming_traceback.traceback import CharmingTraceback
+from charming_traceback.traceback import Traceback
 
 
 def test_install_traceback():
@@ -19,7 +19,7 @@ def test_install_traceback():
 
 
 def test_print_exception(console: Console):
-    from charming_traceback import CharmingTraceback
+    from charming_traceback import Traceback
 
     def function_with_exception():
         raise RuntimeError()
@@ -27,7 +27,7 @@ def test_print_exception(console: Console):
     try:
         function_with_exception()
     except RuntimeError:
-        CharmingTraceback.print_exception(console=console)
+        Traceback.print_exception(console=console)
 
     output = console.file.getvalue()  # type: ignore
     assert "RuntimeError" in output
@@ -41,12 +41,12 @@ def test_print_exception(console: Console):
     ],
 )
 def test_suppress_traceback(console: Console, suppress: list[ModuleType | str]):
-    from charming_traceback import CharmingTraceback
+    from charming_traceback import Traceback
 
     try:
         json.loads("totally valid json string (no)")
     except JSONDecodeError:
-        CharmingTraceback.print_exception(console=console, suppress=suppress)
+        Traceback.print_exception(console=console, suppress=suppress)
 
     output = console.file.getvalue()  # type: ignore
 
@@ -81,4 +81,4 @@ def test_printing():
             raise RuntimeError("This an extra outer exception.")
         except RuntimeError:
             console = Console(force_terminal=True)
-            CharmingTraceback.print_exception(console=console)
+            Traceback.print_exception(console=console)

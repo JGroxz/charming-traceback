@@ -45,7 +45,7 @@ from charming_traceback.styles import (
 )
 
 
-class CharmingTraceback(Traceback):
+class Traceback(Traceback):
     """
     A Console renderable that renders a traceback.
 
@@ -516,7 +516,7 @@ class CharmingTraceback(Traceback):
         if console is None:
             console = rich.get_console()
 
-        traceback = CharmingTraceback(
+        traceback = Traceback(
             width=width,
             code_width=code_width,
             extra_lines=extra_lines,

@@ -1,7 +1,7 @@
 from .installation import install
-from .traceback import CharmingTraceback
+from .traceback import Traceback
 
 __all__ = [
     "install",
-    "CharmingTraceback",
+    "Traceback",
 ]
