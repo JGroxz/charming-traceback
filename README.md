@@ -36,7 +36,7 @@ except Exception as e:
     Traceback.print_exception(show_locals=True)
 ```
 
-Essentially, `CharmingTraceback` class is designed to be a drop-in replacement for `RichTraceback` from Rich. You can refer to the official [Rich traceback documentation][rich_traceback] for more usage info.
+Essentially, `Traceback` class is designed to be a drop-in replacement for `Traceback` from Rich. You can refer to the official [Rich traceback documentation][rich_traceback] for more usage info.
 
 [rich]: https://github.com/Textualize/rich
 [rich_traceback]: https://rich.readthedocs.io/en/stable/traceback.html
