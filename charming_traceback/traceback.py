@@ -527,5 +527,5 @@ class CharmingTraceback(Traceback):
         )
         console.print(
             traceback,
-            crop=False,  # <- no crop to always show full traceback, even in narrow consoles
+            crop=False,  # <- no crop to always show full file path, even in narrow consoles
         )

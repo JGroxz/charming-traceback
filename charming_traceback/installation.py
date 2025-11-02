@@ -88,7 +88,7 @@ def install(
         )
         traceback_console.print(
             exception_traceback,
-            crop=False,  # <- no crop to always show full traceback, even in narrow consoles
+            crop=False,  # <- no crop to always show full file path, even in narrow consoles
         )
 
     def ipy_excepthook_closure(ip: Any) -> None:  # pragma: no cover
