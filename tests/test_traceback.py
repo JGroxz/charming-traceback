@@ -148,7 +148,7 @@ def test_printing():
         nested_function()
     except ExceptionGroup:
         try:
-            raise RuntimeError("This an extra outer exception.")
+            raise RuntimeError("This is an extra outer exception.")
         except RuntimeError:
             console = Console(force_terminal=True)
             Traceback.print_exception(console=console)
