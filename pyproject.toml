@@ -12,8 +12,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "rich>=14.2.0,<15",
-    "uv-build>=0.9.7",
+    "rich>=14.2.0",
 ]
 
 [dependency-groups]
@@ -21,10 +20,11 @@ dev = [
     "ruff>=0.14.2",
     "ruff-lsp>=0.0.62",
     "pytest>=8.4.2",
+    "pytest-cov>=7.0.0",
 ]
 
 [tool.pytest.ini_options]
 log_cli = true
 log_cli_level = "INFO"
 log_cli_format = "[%(asctime)s,%(msecs)03d] %(name)-40.40s %(levelname)s %(message)s"
-addopts = "--color=yes"
+addopts = "--color=yes --cov=charming_traceback"
