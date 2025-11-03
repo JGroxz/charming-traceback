@@ -12,8 +12,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "rich>=14.2.0,<15",
-    "uv-build>=0.9.7",
+    "rich>=14.2.0",
 ]
 
 [dependency-groups]
