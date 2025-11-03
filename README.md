@@ -5,14 +5,14 @@
 ### Differences from the original
 
 - File paths are rendered in the format which allows PyCharm to automatically detect them as links.
-- `CharmingTraceback`'s `suppress` argument accepts string module names in addition to paths and Python modules already supported by `RichTraceback`. 
+- `suppress` argument accepts string module names in addition to paths and Python modules already supported by Rich's `Traceback`. 
 
 ## Installation
 
-Install with `pip`:
+Add to your project with `uv`:
 
 ```bash
-pip install charming-traceback
+uv add charming_traceback
 ```
 
 ## Usage
