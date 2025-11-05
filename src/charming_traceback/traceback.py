@@ -8,7 +8,7 @@ import linecache
 import os
 from pathlib import Path
 from types import ModuleType
-from typing import Iterable
+from typing import Iterable, Sequence
 
 import rich
 from pygments.token import Text as TextToken
@@ -35,17 +35,17 @@ from rich.traceback import (
     Trace,
     LOCALS_MAX_LENGTH,
     LOCALS_MAX_STRING,
-    Traceback,
+    Traceback as RichTraceback,
 )
 
-from charming_traceback.styles import (
+from .styles import (
     TRACEBACK_MIDDLE_BOX,
     TRACEBACK_TOP_BOX,
     TRACEBACK_BOTTOM_BOX,
 )
 
 
-class Traceback(Traceback):
+class Traceback(RichTraceback):
     """
     A Console renderable that renders a traceback.
 
@@ -105,6 +105,10 @@ class Traceback(Traceback):
 
         # handle suppressed modules differently from Rich's implementation
         self.suppress: list[str | Path | ModuleType] = []  # pyright: ignore [reportIncompatibleVariableOverride]
+
+        if isinstance(suppress, str):
+            suppress = (suppress,)
+
         for suppress_entity in suppress:
             if isinstance(suppress_entity, ModuleType):
                 assert suppress_entity.__file__ is not None, (
@@ -215,22 +219,33 @@ class Traceback(Traceback):
     @group()
     def _render_path(
         self,
-        filename: Path,
+        filename: Path | str,
         lineno: int,
         function_name: str | None = None,
-        suppressed: bool = False,
+        is_suppressed: bool = False,
     ) -> RenderResult:
-        path_highlighter = PathHighlighter()
 
         text = Text.from_markup("[traceback.border]╰─▶[/] ")  # ⟶
 
-        if suppressed:
+        if is_suppressed:
             text.append(Text.from_markup("[dim](suppressed) "))
+
+        is_frozen_module = not os.path.exists(filename)
+        if is_frozen_module:
+            path_parts = [
+                Text.from_markup("[dim](frozen) "),
+                (filename, "pygments.string"),
+            ]
+        else:
+            path_highlighter = PathHighlighter()
+            path_parts = [
+                ("File ", "pygments.text"),
+                path_highlighter(Text(f'"{filename}"', style="pygments.string")),
+            ]
 
         text.append(
             Text.assemble(
-                ("File ", "pygments.text"),
-                path_highlighter(Text(f'"{filename}"', style="pygments.string")),
+                *path_parts,
                 (", line ", "pygments.text"),
                 (str(lineno), "pygments.number"),
                 style="pygments.text",
@@ -267,12 +282,6 @@ class Traceback(Traceback):
         highlighter = ReprHighlighter()
         if syntax_error.filename != "<stdin>":
             if os.path.exists(syntax_error.filename):
-                text = Text.assemble(
-                    (f"{syntax_error.filename}", "pygments.string"),
-                    (":", "pygments.text"),
-                    (str(syntax_error.lineno), "pygments.number"),
-                    style="pygments.text",
-                )
                 yield self._render_path(syntax_error.filename, syntax_error.lineno)
 
         syntax_error_text = highlighter(syntax_error.line.rstrip())
@@ -378,76 +387,63 @@ class Traceback(Traceback):
                 )
                 excluded = False
 
-            suppressed = self._check_should_suppress(frame.filename)
+            is_suppressed = self._check_should_suppress(frame.filename)
             if is_last:
-                suppressed = False  # <- always show the last frame
+                is_suppressed = False  # <- always show the last frame
 
-            frozen_module = frame.filename.startswith("<")
-
-            if frozen_module:
-                yield from render_locals(frame)
+            is_frozen_module = not os.path.exists(frame.filename)
+            if is_suppressed or is_frozen_module:
+                yield Text.from_markup("[traceback.border]┬")
             else:
-                if suppressed:
-                    yield Text.from_markup("[traceback.border]┬")
-                else:
-                    panel_content = None
-                    try:
-                        code = read_code(frame.filename)
-                        lexer_name = self._guess_lexer(frame.filename, code)
-                        syntax = Syntax(
-                            code,
-                            lexer_name,
-                            theme=theme,
-                            line_numbers=True,
-                            line_range=(
-                                frame.lineno - self.extra_lines,
-                                frame.lineno + self.extra_lines,
-                            ),
-                            highlight_lines={frame.lineno},
-                            word_wrap=self.word_wrap,
-                            code_width=self.code_width,
-                            indent_guides=self.indent_guides,
-                            dedent=False,
+                panel_content = None
+                try:
+                    code = read_code(frame.filename)
+                    lexer_name = self._guess_lexer(frame.filename, code)
+                    syntax = Syntax(
+                        code,
+                        lexer_name,
+                        theme=theme,
+                        line_numbers=True,
+                        line_range=(
+                            frame.lineno - self.extra_lines,
+                            frame.lineno + self.extra_lines,
+                        ),
+                        highlight_lines={frame.lineno},
+                        word_wrap=self.word_wrap,
+                        code_width=self.code_width,
+                        indent_guides=self.indent_guides,
+                        dedent=False,
+                    )
+                    panel_content = (
+                        Columns(
+                            [
+                                syntax,
+                                *render_locals(frame),
+                            ],
+                            padding=1,
                         )
-                        panel_content = (
-                            Columns(
-                                [
-                                    syntax,
-                                    *render_locals(frame),
-                                ],
-                                padding=1,
-                            )
-                            if frame.locals
-                            else syntax
-                        )
-                    except Exception as error:
-                        error_text = f"\nException message: {error}" if error else ""
-                        panel_content = Text.from_markup(
-                            f"[dim]Caught {type(error).__name__} when rendering code from '{frame.filename}'.{error_text}"
-                        )
-                    finally:
-                        yield Panel(
-                            panel_content,  # pyright: ignore [reportArgumentType]
-                            title_align="center",
-                            box=TRACEBACK_MIDDLE_BOX,
-                            style=self.theme.get_background_style(),
-                            border_style="traceback.border",
-                            expand=True,
-                            width=self.width,
-                        )
+                        if frame.locals
+                        else syntax
+                    )
+                except Exception as error:
+                    error_text = f"\nException message: {error}" if error else ""
+                    panel_content = Text.from_markup(
+                        f"[dim]Caught {type(error).__name__} when rendering code from '{frame.filename}'.{error_text}"
+                    )
+                finally:
+                    yield Panel(
+                        panel_content,  # pyright: ignore [reportArgumentType]
+                        title_align="center",
+                        box=TRACEBACK_MIDDLE_BOX,
+                        style=self.theme.get_background_style(),
+                        border_style="traceback.border",
+                        expand=True,
+                        width=self.width,
+                    )
 
-            if os.path.exists(frame.filename):
-                yield self._render_path(
-                    frame.filename, frame.lineno, frame.name, suppressed
-                )
-            else:
-                yield Text.assemble(
-                    ("┬\n", "traceback.border"),
-                    ("╰─▶", "traceback.border"),
-                    " in ",
-                    (frame.filename, "pygments.function"),
-                    overflow="ignore",
-                )
+            yield self._render_path(
+                frame.filename, frame.lineno, frame.name, is_suppressed
+            )
 
             if is_last:
                 yield Segment.line()
@@ -459,7 +455,6 @@ class Traceback(Traceback):
         Args:
             frame_filename (str): Frame's filename.
         """
-
         for suppress_entity in self.suppress:
             assert isinstance(suppress_entity, (str, Path)), (
                 f"{suppress_entity!r} must be a string or a file path"
