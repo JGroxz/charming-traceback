@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "charming-traceback"
-version = "0.1.6"
+version = "0.1.7"
 description = "Rich traceback adapted for PyCharm IDE by JetBrains"
 authors = [
     {name = "Yevhen Bondarenko", email = "zekbond@gmail.com"},
