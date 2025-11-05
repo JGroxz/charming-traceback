@@ -1,12 +1,13 @@
 import asyncio
 import sys
+from pathlib import Path
 from types import ModuleType, TracebackType
 from typing import Callable, Any, Iterable
 
 from rich.console import Console
 from rich.traceback import LOCALS_MAX_LENGTH, LOCALS_MAX_STRING
 
-from charming_traceback.traceback import Traceback
+from .traceback import Traceback
 
 
 def install(
@@ -23,7 +24,7 @@ def install(
     locals_hide_dunder: bool = True,
     locals_hide_sunder: bool | None = None,
     indent_guides: bool = True,
-    suppress: Iterable[str | ModuleType] = (),
+    suppress: Iterable[str | Path | ModuleType] = (),
     max_frames: int = 100,
 ) -> Callable[[type[BaseException], BaseException, TracebackType | None], Any]:
     """
@@ -46,7 +47,7 @@ def install(
         locals_hide_dunder (bool, optional): Hide locals prefixed with double underscore. Defaults to True.
         locals_hide_sunder (bool, optional): Hide locals prefixed with single underscore. Defaults to False.
         indent_guides (bool, optional): Enable indent guides in code and locals. Defaults to True.
-        suppress (Sequence[str | ModuleType]): Optional sequence of modules, module names or paths to exclude from traceback.
+        suppress (Sequence[str | Path | ModuleType]): Optional sequence of modules, module names or paths to exclude from traceback.
         max_frames (int, optional): Maximum number of frames to display. Defaults to 100.
 
     Returns:
