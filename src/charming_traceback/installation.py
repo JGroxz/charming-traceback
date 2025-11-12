@@ -135,6 +135,37 @@ def install(
             *args, is_syntax=True, **kwargs
         )
 
+    try:  # pragma: no cover
+        # if within ipython, use customized traceback
+        ipython = get_ipython()  # type: ignore[name-defined] # noqa: F821
+        ipy_excepthook_closure(ipython)
+        return sys.excepthook
+    except (ImportError, NameError):
+        # otherwise use default system hook
+        old_excepthook = sys.excepthook
+        sys.excepthook = excepthook
+
+        # if within asyncio, update loop exception handler as well
+        _install_for_asyncio(excepthook)
+
+        # install threading exception hook as well
+        _install_for_threading(excepthook)
+
+        return old_excepthook
+
+
+def _install_for_asyncio(
+    excepthook: Callable[
+        [type[BaseException], BaseException, TracebackType | None], None
+    ],
+):
+    """
+    Installs the given excepthook as the exception handler for the current asyncio event loop, if one is running.
+
+    Returns:
+        The previous exception handler that was replaced, or None if there was no previous handler.
+    """
+
     def asyncio_excepthook(loop: Any, context: dict[str, Any]) -> None:
         exception: BaseException | None = context.get("exception", None)
         if exception is None:
@@ -148,18 +179,32 @@ def install(
             None,
         )
 
-    try:  # pragma: no cover
-        # if within ipython, use customized traceback
-        ipython = get_ipython()  # type: ignore[name-defined] # noqa: F821
-        ipy_excepthook_closure(ipython)
-        return sys.excepthook
-    except Exception:
-        # otherwise use default system hook
-        old_excepthook = sys.excepthook
-        sys.excepthook = excepthook
-
-        # if within asyncio, update loop exception handler as well
+    try:
         loop = asyncio.get_event_loop()
-        loop.set_exception_handler(asyncio_excepthook)
+    except RuntimeError:
+        # No event loop in this thread
+        return None
 
-        return old_excepthook
+    # Install the new exception handler
+    old_handler = loop.get_exception_handler()
+    loop.set_exception_handler(asyncio_excepthook)
+    return old_handler
+
+
+def _install_for_threading(
+    excepthook: Callable[
+        [type[BaseException], BaseException, TracebackType | None], None
+    ],
+):
+    """
+    Installs the given excepthook as the exception handler for threading.Thread.
+
+    Returns:
+        The previous exception handler that was replaced, or None if there was no previous handler.
+    """
+
+    import threading
+
+    old_excepthook = threading.excepthook
+    threading.excepthook = excepthook
+    return old_excepthook
