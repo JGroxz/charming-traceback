@@ -4,7 +4,7 @@ from pathlib import Path
 from types import ModuleType, TracebackType
 from typing import Callable, Any, Iterable
 
-from rich.console import Console
+from rich.console import Console, OverflowMethod
 from rich.traceback import LOCALS_MAX_LENGTH, LOCALS_MAX_STRING
 
 from .traceback import Traceback
@@ -21,8 +21,10 @@ def install(
     show_locals: bool = False,
     locals_max_length: int = LOCALS_MAX_LENGTH,
     locals_max_string: int = LOCALS_MAX_STRING,
+    locals_max_depth: int | None = None,
     locals_hide_dunder: bool = True,
     locals_hide_sunder: bool | None = None,
+    locals_overflow: OverflowMethod | None = None,
     indent_guides: bool = True,
     suppress: Iterable[str | Path | ModuleType] = (),
     max_frames: int = 100,
@@ -44,8 +46,10 @@ def install(
         locals_max_length (int, optional): Maximum length of containers before abbreviating, or None for no abbreviation.
             Defaults to 10.
         locals_max_string (int, optional): Maximum length of string before truncating, or None to disable. Defaults to 80.
+        locals_max_depth (int, optional): Maximum depths of locals before truncating, or None to disable. Defaults to None.
         locals_hide_dunder (bool, optional): Hide locals prefixed with double underscore. Defaults to True.
         locals_hide_sunder (bool, optional): Hide locals prefixed with single underscore. Defaults to False.
+        locals_overflow (OverflowMethod, optional): How to handle overflowing locals, or None to disable. Defaults to None.
         indent_guides (bool, optional): Enable indent guides in code and locals. Defaults to True.
         suppress (Sequence[str | Path | ModuleType]): Optional sequence of modules, module names or paths to exclude from traceback.
         max_frames (int, optional): Maximum number of frames to display. Defaults to 100.
@@ -83,6 +87,8 @@ def install(
             locals_max_string=locals_max_string,
             locals_hide_dunder=locals_hide_dunder,
             locals_hide_sunder=bool(locals_hide_sunder),
+            locals_overflow=locals_overflow,
+            locals_max_depth=locals_max_depth,
             indent_guides=indent_guides,
             suppress=suppress,
             max_frames=max_frames,

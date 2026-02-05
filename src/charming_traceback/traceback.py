@@ -8,7 +8,7 @@ import linecache
 import os
 from pathlib import Path
 from types import ModuleType
-from typing import Iterable, Sequence
+from typing import Iterable
 
 import rich
 from pygments.token import Text as TextToken
@@ -16,7 +16,7 @@ from pygments.token import Token, String, Name, Number, Comment, Keyword, Operat
 from rich._loop import loop_last
 from rich.cells import cell_len
 from rich.columns import Columns
-from rich.console import Console, Group
+from rich.console import Console, Group, OverflowMethod
 from rich.console import ConsoleOptions, RenderResult, ConsoleRenderable, group
 from rich.constrain import Constrain
 from rich.highlighter import ReprHighlighter
@@ -36,6 +36,7 @@ from rich.traceback import (
     LOCALS_MAX_LENGTH,
     LOCALS_MAX_STRING,
     Traceback as RichTraceback,
+    _iter_syntax_lines,
 )
 
 from .styles import (
@@ -80,8 +81,10 @@ class Traceback(RichTraceback):
         show_locals: bool = False,
         locals_max_length: int = LOCALS_MAX_LENGTH,
         locals_max_string: int = LOCALS_MAX_STRING,
+        locals_max_depth: int | None = None,
         locals_hide_dunder: bool = True,
         locals_hide_sunder: bool = False,
+        locals_overlow: OverflowMethod | None = None,
         indent_guides: bool = True,
         suppress: Iterable[str | Path | ModuleType] = (),
         max_frames: int = 100,
@@ -96,8 +99,10 @@ class Traceback(RichTraceback):
             show_locals=show_locals,
             locals_max_length=locals_max_length,
             locals_max_string=locals_max_string,
+            locals_max_depth=locals_max_depth,
             locals_hide_dunder=locals_hide_dunder,
             locals_hide_sunder=locals_hide_sunder,
+            locals_overlow=locals_overlow,
             indent_guides=indent_guides,
             suppress=[],  # <- we handle suppress list differently from rich (see below)
             max_frames=max_frames,
@@ -346,9 +351,6 @@ class Traceback(RichTraceback):
     def _render_frames(self, console: Console, frames: list[Frame]) -> RenderResult:
         theme = self.theme
 
-        def read_code(filename: str) -> str:
-            return "".join(linecache.getlines(filename))
-
         def render_locals(frame: Frame) -> Iterable[ConsoleRenderable]:
             if frame.locals:
                 yield render_scope(
@@ -397,7 +399,12 @@ class Traceback(RichTraceback):
             else:
                 panel_content = None
                 try:
-                    code = read_code(frame.filename)
+                    code_lines = linecache.getlines(frame.filename)
+                    code = "".join(code_lines)
+                    if not code:
+                        # code may be an empty string if the file doesn't exist, OR
+                        # if the traceback filename is generated dynamically
+                        continue
                     lexer_name = self._guess_lexer(frame.filename, code)
                     syntax = Syntax(
                         code,
@@ -414,6 +421,30 @@ class Traceback(RichTraceback):
                         indent_guides=self.indent_guides,
                         dedent=False,
                     )
+
+                    if frame.last_instruction is not None:
+                        start, end = frame.last_instruction
+
+                        # Stylize a line at a time
+                        # So that indentation isn't underlined (which looks bad)
+                        for line1, column1, column2 in _iter_syntax_lines(start, end):
+                            try:
+                                if column1 == 0:
+                                    line = code_lines[line1 - 1]
+                                    column1 = len(line) - len(line.lstrip())
+                                if column2 == -1:
+                                    column2 = len(code_lines[line1 - 1])
+                            except IndexError:
+                                # Being defensive here
+                                # If last_instruction reports a line out-of-bounds, we don't want to crash
+                                continue
+
+                            syntax.stylize_range(
+                                style="traceback.error_range",
+                                start=(line1, column1),
+                                end=(line1, column2),
+                            )
+
                     panel_content = (
                         Columns(
                             [
