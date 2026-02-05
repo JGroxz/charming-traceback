@@ -16,7 +16,7 @@ from pygments.token import Token, String, Name, Number, Comment, Keyword, Operat
 from rich._loop import loop_last
 from rich.cells import cell_len
 from rich.columns import Columns
-from rich.console import Console, Group
+from rich.console import Console, Group, OverflowMethod
 from rich.console import ConsoleOptions, RenderResult, ConsoleRenderable, group
 from rich.constrain import Constrain
 from rich.highlighter import ReprHighlighter
@@ -80,8 +80,10 @@ class Traceback(RichTraceback):
         show_locals: bool = False,
         locals_max_length: int = LOCALS_MAX_LENGTH,
         locals_max_string: int = LOCALS_MAX_STRING,
+        locals_max_depth: int | None = None,
         locals_hide_dunder: bool = True,
         locals_hide_sunder: bool = False,
+        locals_overlow: OverflowMethod | None = None,
         indent_guides: bool = True,
         suppress: Iterable[str | Path | ModuleType] = (),
         max_frames: int = 100,
@@ -96,8 +98,10 @@ class Traceback(RichTraceback):
             show_locals=show_locals,
             locals_max_length=locals_max_length,
             locals_max_string=locals_max_string,
+            locals_max_depth=locals_max_depth,
             locals_hide_dunder=locals_hide_dunder,
             locals_hide_sunder=locals_hide_sunder,
+            locals_overlow=locals_overlow,
             indent_guides=indent_guides,
             suppress=[],  # <- we handle suppress list differently from rich (see below)
             max_frames=max_frames,
