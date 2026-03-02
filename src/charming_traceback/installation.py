@@ -2,7 +2,7 @@ import asyncio
 import sys
 from pathlib import Path
 from types import ModuleType, TracebackType
-from typing import Callable, Any, Iterable
+from typing import Any, Callable, Iterable
 
 from rich.console import Console, OverflowMethod
 from rich.traceback import LOCALS_MAX_LENGTH, LOCALS_MAX_STRING
@@ -211,6 +211,9 @@ def _install_for_threading(
 
     import threading
 
+    def threading_excepthook(args: threading.ExceptHookArgs) -> None:
+        excepthook(args.exc_type, args.exc_value, args.exc_traceback)
+
     old_excepthook = threading.excepthook
-    threading.excepthook = excepthook
+    threading.excepthook = threading_excepthook
     return old_excepthook
