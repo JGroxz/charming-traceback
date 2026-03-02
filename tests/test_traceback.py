@@ -97,7 +97,7 @@ def test_output_formatting(console: Console):
     ],
 )
 def test_suppressed_output_formatting(
-    console: Console, suppress: list[ModuleType | str]
+        console: Console, suppress: list[ModuleType | str]
 ):
     """
     Tests that frames from suppressed modules are correctly minimized in the traceback output.
@@ -152,3 +152,22 @@ def test_printing():
         except RuntimeError:
             console = Console(force_terminal=True)
             Traceback.print_exception(console=console)
+
+
+def test_printing_in_thread():
+    """
+    Tests that exceptions raised in threads are also captured by our excepthook.
+    """
+
+    import threading
+
+    from charming_traceback import install
+
+    install()
+
+    def thread_function():
+        raise RuntimeError("Exception from thread")
+
+    thread = threading.Thread(target=thread_function)
+    thread.start()
+    thread.join()
